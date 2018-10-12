@@ -1,8 +1,12 @@
 #include "olcPixelGameEngine.h"
 #include <vector>
+#include <istream>
+#include <fstream>
 
 using std::to_string;
 using std::vector;
+using std::cout;
+using std::endl;
 
 class pgeHanjie : public olc::PixelGameEngine
 {
@@ -21,8 +25,8 @@ private:
 
 	int nCornerX = 48;
 	int nCornerY = 48;
-	int nGridWidth = 10;
-	int nGridHeight = 10;
+	int nGridWidth = 15;
+	int nGridHeight = 15;
 	int nCellSize = 17;
 	int nThumbCellSize = 5;
 	unsigned char* pGrid = nullptr;
@@ -34,6 +38,65 @@ private:
 	int MouseGridY = 0;
 
 public:
+
+	void LoadCluesFromFile(std::string path)
+	{
+		std::ifstream file(path);
+
+		if (file.is_open())
+		{
+			enum MODE {ROW, COL};
+			MODE clueMode = COL;
+			std::string line;
+			std::vector<int> tempNums;
+
+			cluesCol.clear();
+			cluesRow.clear();
+
+			while (getline(file, line))
+			{
+				if (line == "<cols>")
+					clueMode = COL;
+				else if (line == "<rows>")
+					clueMode = ROW;
+				else
+				{
+					int n = -1;
+					for (auto c : line)
+					{
+						if (c != ',' && n < 0)
+						{
+							n = c - '0';
+						}
+						else if (c != ',' && n >= 0)
+						{
+							n *= 10;
+							n += c - '0';
+						}
+						else if (c == ',')
+						{
+							tempNums.push_back(n);
+							n = -1;
+						}
+						else
+							std::cout << "SOMETHING WENT WRONG (CLUEMODE)" << std::endl;
+					}
+					tempNums.push_back(n);
+
+					if (clueMode == COL)
+						cluesCol.push_back(tempNums);
+					else
+						cluesRow.push_back(tempNums);
+
+					tempNums.clear();
+				}
+			}
+		}
+		else
+			std::cout << "UNABLE TO OPEN FILE" << std::endl;
+
+		file.close();
+	}
 	void LoadClues()
 	{
 		std::vector<int> tempNums;
@@ -96,12 +159,18 @@ public:
 
 		//Side
 		for (int y = 0; y < cluesRow.size(); y++)
+		{
+			int extraDigits = 0;
+
 			for (int i = 0; i < cluesRow[y].size(); i++)
 			{
-				DrawString(i * 11 + 1, y * nCellSize + nCornerY + 5, to_string(cluesRow[y][i]), olc::BLACK);
+				DrawString(i * 11 + 1 + (extraDigits*8), y * nCellSize + nCornerY + 5, to_string(cluesRow[y][i]), olc::BLACK);
+				if (cluesRow[y][i] >= 10)
+					extraDigits++;
 				if (i < cluesRow[y].size() - 1)
-					DrawString(i * 11 + 7, y * nCellSize + nCornerY + 5, ",", olc::BLACK);
+					DrawString(i * 11 + 7 + (extraDigits * 8), y * nCellSize + nCornerY + 5, ",", olc::BLACK);
 			}
+		}
 	}
 	void DrawGrid()
 	{
@@ -118,14 +187,6 @@ public:
 			if (i % 5 == 0)
 				DrawLine(nCornerX, nCornerY + nCellSize * i, nCornerX + nCellSize * nGridWidth, nCornerY + nCellSize * i, olc::BLACK);
 	}
-
-	int ToScreenCoord(int gridCoord)
-	{
-
-
-		return 0;
-	}
-
 	int ToGridCoord(int screenCoord)
 	{
 		return (screenCoord - nCornerX) / nCellSize;
@@ -139,7 +200,9 @@ public:
 
 		// Draw grid and clues
 		FillRect(0, 0, ScreenWidth(), ScreenHeight());
-		LoadClues();
+		//LoadClues();
+		//LoadCluesFromFile("musical.txt");
+		LoadCluesFromFile("puppy.txt");
 		DrawClues();
 		DrawGrid();
 
@@ -183,7 +246,6 @@ public:
 
 
 		// Draw
-		//Large version
 		for (int i = 0; i < nGridWidth; i++)
 		{
 			for (int j = 0; j < nGridHeight; j++)
@@ -223,7 +285,7 @@ public:
 int main()
 {
 	pgeHanjie demo;
-	if (demo.Construct(400, 400, 1, 1))
+	if (demo.Construct(800, 600, 1, 1))
 		demo.Start();
 	//if (demo.Construct(60, 30, 10, 10))
 	//	demo.Start();
