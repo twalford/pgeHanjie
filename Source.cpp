@@ -18,18 +18,19 @@ public:
 
 	~pgeHanjie()
 	{
-		delete pGrid;
+		delete[] pGrid;
 	}
 
 private:
 
 	int nCornerX = 48;
 	int nCornerY = 48;
-	int nGridWidth = 15;
-	int nGridHeight = 15;
+	int nGridWidth;
+	int nGridHeight;
 	int nCellSize = 17;
 	int nThumbCellSize = 5;
 	unsigned char* pGrid = nullptr;
+	std::string puzzleName = "puppy";
 
 	vector<vector<int>> cluesCol;
 	vector<vector<int>> cluesRow;
@@ -39,9 +40,9 @@ private:
 
 public:
 
-	void LoadCluesFromFile(std::string path)
+	void LoadCluesFromFile()
 	{
-		std::ifstream file(path);
+		std::ifstream file(puzzleName + ".txt");
 
 		if (file.is_open())
 		{
@@ -91,59 +92,14 @@ public:
 					tempNums.clear();
 				}
 			}
+
+			nGridWidth = cluesCol.size();
+			nGridHeight = cluesRow.size();
 		}
 		else
 			std::cout << "UNABLE TO OPEN FILE" << std::endl;
 
 		file.close();
-	}
-	void LoadClues()
-	{
-		std::vector<int> tempNums;
-
-		//Clues for each column
-		tempNums = { 2 };
-		cluesCol.push_back(tempNums);
-		tempNums = { 4 };
-		cluesCol.push_back(tempNums);
-		tempNums = { 4 };
-		cluesCol.push_back(tempNums);
-		tempNums = { 8 };
-		cluesCol.push_back(tempNums);
-		tempNums = { 1,1 };
-		cluesCol.push_back(tempNums);
-		tempNums = { 1,1 };
-		cluesCol.push_back(tempNums);
-		tempNums = { 1,1,2 };
-		cluesCol.push_back(tempNums);
-		tempNums = { 1,1,4 };
-		cluesCol.push_back(tempNums);
-		tempNums = { 1,1,4 };
-		cluesCol.push_back(tempNums);
-		tempNums = { 8 };
-		cluesCol.push_back(tempNums);
-
-		//Clue for each Row
-		tempNums = { 4 };
-		cluesRow.push_back(tempNums);
-		tempNums = { 3,1 };
-		cluesRow.push_back(tempNums);
-		tempNums = { 1,4 };
-		cluesRow.push_back(tempNums);
-		tempNums = { 3,1 };
-		cluesRow.push_back(tempNums);
-		tempNums = { 1,1 };
-		cluesRow.push_back(tempNums);
-		tempNums = { 1,3 };
-		cluesRow.push_back(tempNums);
-		tempNums = { 3,4 };
-		cluesRow.push_back(tempNums);
-		tempNums = { 4,4 };
-		cluesRow.push_back(tempNums);
-		tempNums = { 4,2 };
-		cluesRow.push_back(tempNums);
-		tempNums = { 2 };
-		cluesRow.push_back(tempNums);
 	}
 	void DrawClues()
 	{
@@ -187,22 +143,212 @@ public:
 			if (i % 5 == 0)
 				DrawLine(nCornerX, nCornerY + nCellSize * i, nCornerX + nCellSize * nGridWidth, nCornerY + nCellSize * i, olc::BLACK);
 	}
+
 	int ToGridCoord(int screenCoord)
 	{
 		return (screenCoord - nCornerX) / nCellSize;
 	}
+	int TotalFromClue(std::vector<int> &clues)
+	{
+		int total = 0;
+		for (auto c : clues)
+			total += (c + 1);
+		
+		return total - 1;
+	}
+	int TotalDotsInLine(int index, char set)
+	{
+		int total = 0;
+
+		if (set == 'c')
+			for (int i = 0; i < nGridHeight; i++)
+				if (pGrid[i*nGridWidth+index] == '2')
+					total++;
+
+		return total;
+	}
+
+	bool SolveLines(vector<vector<int>> &cluesVec, char clueOrientation)
+	{
+		int lineLength = clueOrientation == 'c' ? nGridHeight : nGridWidth;
+		int nNumLines = clueOrientation == 'c' ? nGridWidth : nGridHeight;
+		
+		cout << "===== Solving " << clueOrientation << " =====" << endl;
+		for (int i = 0; i < nNumLines; i++)
+		{
+			//create a temp line for easier data handling
+			unsigned char* pLine = new unsigned char[lineLength];
+
+			if (clueOrientation == 'c')
+				for (int j = 0; j < lineLength; j++)
+					pLine[j] = pGrid[j * nGridWidth + i];
+			else
+				for (int j = 0; j < lineLength; j++)
+					pLine[j] = pGrid[i * nGridWidth + j];
+
+			//A series of clue checks
+			if (cluesVec[i][0] == lineLength)
+			{
+				//single clue fills whole line
+
+				for (int j = 0; j < lineLength; j++)
+					pLine[j] = '1';
+			}
+			else if (TotalFromClue(cluesVec[i]) == lineLength)
+			{
+				//multi clue fills whole line
+
+				int ci = 0;		//clue index
+				int s = 0;		//start of block
+				for (int j = 0; j < lineLength; j++)
+				{
+					if (j < cluesVec[i][ci] + s)
+						pLine[j] = '1';
+					else
+					{
+						pLine[j] = '2';
+						s = j + 1;
+						ci++;
+					}
+				}
+			}
+			else
+			{
+				//Check how many solid in line
+				int numSolid = 0;
+				for (int j = 0; j < lineLength; j++)
+				{
+					if (pLine[j] == '1')
+						numSolid++;
+				}
+
+				if (cluesVec[i].size() == 1 && cluesVec[i][0] == numSolid)
+				{
+					//line has the right number of blocks placed. fill rest with markers.
+
+					for (int j = 0; j < lineLength; j++)
+					{
+						if (pLine[j] != '1')
+							pLine[j] = '2';
+					}
+				}
+				else if (cluesVec[i].size() == 1 && numSolid > 0)
+				{
+					//line has single clue and some blocks solid. attempt to place markers.
+
+					//find first and last solid.
+					int firstSolid = -1;
+					int lastSolid = -1;
+
+					for (int j = 0; j < lineLength; j++)
+					{
+						if (pLine[j] == '1')
+						{
+							//Find first and last solid blocks
+							if (firstSolid == -1)
+								firstSolid = j;
+							lastSolid = j;
+						}
+					}
+
+					//place markers where block cant extend to
+					for (int j = 0; j < lineLength; j++)
+					{
+						if (j < lastSolid - cluesVec[i][0] || j > firstSolid + cluesVec[i][0])
+							pLine[j] = '2';
+					}
+
+				}
+				
+				if (cluesVec[i].size() == 1 && numSolid < cluesVec[i][0])
+				{
+					//TODO what if there's two or more gaps. Make a struct for gaps?
+
+					//finds the first empty gap in a line
+					int gapStart = 0;
+					int gapEnd = lineLength;
+					int gapSize = 0;
+					bool inGap = false;
+					bool hasGap = false;
+
+					for (int j = 0; j < lineLength; j++)
+					{
+						if (pLine[j] != '2')
+						{
+							if (!inGap)
+							{
+								gapStart = j;
+								hasGap = true;
+							}
+							inGap = true;
+						}
+						else
+						{
+							if (inGap)
+								gapEnd = j;
+							inGap = false;
+						}
+					}
+
+					gapSize = gapEnd - gapStart;
+
+					//single clue fits gap
+					if (cluesVec[i][0] * 2 > gapSize)
+					{
+						if (cluesVec[i][0] > gapSize || !hasGap)
+						{
+							if (!hasGap)
+								cout << "i= " << i << " ERROR no gap" << endl;
+							else
+								cout << "i= " << i << " ERROR small gap" << endl;
+							delete[] pLine;
+							continue; //goto next line
+						}
+
+						int n = cluesVec[i][0] * 2 - gapSize;	//number of cells to add
+						int s = (gapSize / 2) - (n / 2);		//starting pos in gap
+
+						cout << "i= " << i << "  gs= " << gapSize << "  l= " << n << "  s= " << s << endl;
+
+						for (int j = 0; j < n; j++)
+							pLine[s + gapStart + j] = '1';
+					}
+					else
+					{
+						delete[] pLine;
+						continue; //goto next line
+					}
+				}
+
+			}
+
+			//save the temp line to grid
+			if (clueOrientation == 'c')
+				for (int j = 0; j < lineLength; j++)
+					pGrid[j * nGridWidth + i] = pLine[j];
+			else
+				for (int j = 0; j < lineLength; j++)
+					pGrid[i * nGridWidth + j] = pLine[j];
+
+			delete pLine;
+			//end of a line
+
+		}
+		cout << "=====================" << endl;
+		return true;
+	}
 
 	bool OnUserCreate() override
 	{
-		// Initialise variables
+		//Load game info
+		LoadCluesFromFile();
+
+		// Initialise grid
 		pGrid = new unsigned char[nGridWidth*nGridHeight];
 		memset(pGrid, '0', nGridWidth*nGridHeight);
 
 		// Draw grid and clues
 		FillRect(0, 0, ScreenWidth(), ScreenHeight());
-		//LoadClues();
-		//LoadCluesFromFile("musical.txt");
-		LoadCluesFromFile("puppy.txt");
 		DrawClues();
 		DrawGrid();
 
@@ -241,8 +387,17 @@ public:
 			}
 		}
 
-		// Logic
+		if (GetKey(olc::C).bPressed)
+			SolveLines(cluesCol, 'c');
+		
+		if (GetKey(olc::X).bPressed)
+			SolveLines(cluesRow, 'r');
 
+		if (GetKey(olc::R).bPressed)
+			memset(pGrid, '0', nGridWidth*nGridHeight);
+
+		// Logic 
+		// no logic only spaghetti
 
 
 		// Draw
@@ -287,8 +442,6 @@ int main()
 	pgeHanjie demo;
 	if (demo.Construct(800, 600, 1, 1))
 		demo.Start();
-	//if (demo.Construct(60, 30, 10, 10))
-	//	demo.Start();
-
+	
 	return 0;
 }
