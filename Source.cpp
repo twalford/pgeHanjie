@@ -148,6 +148,16 @@ public:
 	{
 		return (screenCoord - nCornerX) / nCellSize;
 	}
+	int LargestFromClue(std::vector<int> &clues)
+	{
+		int largest = 0;
+
+		for (auto c : clues)
+			if (c > largest)
+				largest = c;
+
+		return largest;
+	}
 	int TotalFromClue(std::vector<int> &clues)
 	{
 		int total = 0;
@@ -176,135 +186,170 @@ public:
 		cout << "===== Solving " << clueOrientation << " =====" << endl;
 		for (int i = 0; i < nNumLines; i++)
 		{
-			//create a temp line for easier data handling
+			//create temp lines
 			unsigned char* pLine = new unsigned char[lineLength];
+			unsigned char* pLeft = new unsigned char[lineLength];
+			unsigned char* pRight = new unsigned char[lineLength];
+			memset(pLeft, '0', lineLength);
+			memset(pRight, '0', lineLength);
 
+			//copy over the line data
 			if (clueOrientation == 'c')
 				for (int j = 0; j < lineLength; j++)
 					pLine[j] = pGrid[j * nGridWidth + i];
 			else
 				for (int j = 0; j < lineLength; j++)
 					pLine[j] = pGrid[i * nGridWidth + j];
+			
+			//Compact the clues to the left side, save it to pLeft
+			int ci = 0;		//clue index
+			int s = 0;		//start of block
 
-			//A series of clue checks
-			if (cluesVec[i][0] == lineLength)
+			for (int j = 0; j < lineLength; j++)
 			{
-				//single clue fills whole line
-
-				for (int j = 0; j < lineLength; j++)
-					pLine[j] = '1';
-			}
-			else if (TotalFromClue(cluesVec[i]) == lineLength)
-			{
-				//multi clue fills whole line
-
-				int ci = 0;		//clue index
-				int s = 0;		//start of block
-				for (int j = 0; j < lineLength; j++)
+				if (ci >= cluesVec[i].size())
+					pLeft[j] = '0';
+				else
 				{
 					if (j < cluesVec[i][ci] + s)
-						pLine[j] = '1';
+						pLeft[j] = ci - '0';
 					else
 					{
-						pLine[j] = '2';
+						pLeft[j] = '0';
 						s = j + 1;
 						ci++;
 					}
 				}
+					
 			}
-			else
+
+			//Compact the clues to the right side, save it to pRight
+			ci = cluesVec[i].size() - 1;	//clue index
+			s = lineLength;					//start of block
+
+			for (int j = lineLength - 1; j >= 0; j--)
 			{
-				//Check how many solid in line
-				int numSolid = 0;
+				if (ci < 0)
+					pRight[j] = '0';
+				else
+				{
+					if (j > s - cluesVec[i][ci] - 1)
+						pRight[j] = ci - '0';
+					else
+					{
+						pRight[j] = '0';
+						s = j - 1;
+						ci--;
+					}
+				}
+			}
+
+			//Find where clues overlap in pLeft and pRight
+			int gap = lineLength - TotalFromClue(cluesVec[i]);
+
+			if (LargestFromClue(cluesVec[i]) > gap)
+			{
+				for (int j = 0; j < lineLength; j++)
+				{
+					if (pLeft[j] == pRight[j] && pRight[j] != '0')
+						pLine[j] = '1';
+				}
+			}
+
+			//Check how many solid in line
+			int numSolid = 0;
+			for (int j = 0; j < lineLength; j++)
+			{
+				if (pLine[j] == '1')
+					numSolid++;
+			}
+
+			//if line has the right number of blocks placed. fill rest with markers.
+			if (cluesVec[i].size() == 1 && cluesVec[i][0] == numSolid)
+			{
+				for (int j = 0; j < lineLength; j++)
+				{
+					if (pLine[j] != '1')
+						pLine[j] = '2';
+				}
+			}
+			else if (cluesVec[i].size() == 1 && numSolid > 0)
+			{
+				//line has single clue and some blocks solid. attempt to place markers.
+
+				//find first and last solid.
+				int firstSolid = -1;
+				int lastSolid = -1;
+
 				for (int j = 0; j < lineLength; j++)
 				{
 					if (pLine[j] == '1')
-						numSolid++;
-				}
-
-				if (cluesVec[i].size() == 1 && cluesVec[i][0] == numSolid)
-				{
-					//line has the right number of blocks placed. fill rest with markers.
-
-					for (int j = 0; j < lineLength; j++)
 					{
-						if (pLine[j] != '1')
-							pLine[j] = '2';
+						//Find first and last solid blocks
+						if (firstSolid == -1)
+							firstSolid = j;
+						lastSolid = j;
 					}
 				}
-				else if (cluesVec[i].size() == 1 && numSolid > 0)
+
+				for (int j = 0; j < lineLength; j++)
 				{
-					//line has single clue and some blocks solid. attempt to place markers.
-
-					//find first and last solid.
-					int firstSolid = -1;
-					int lastSolid = -1;
-
-					for (int j = 0; j < lineLength; j++)
-					{
-						if (pLine[j] == '1')
-						{
-							//Find first and last solid blocks
-							if (firstSolid == -1)
-								firstSolid = j;
-							lastSolid = j;
-						}
-					}
-
 					//place markers where block cant extend to
-					for (int j = 0; j < lineLength; j++)
-					{
-						if (j < lastSolid - cluesVec[i][0] || j > firstSolid + cluesVec[i][0])
-							pLine[j] = '2';
-					}
+					if (j < lastSolid - cluesVec[i][0] + 1 || j >= firstSolid + cluesVec[i][0])
+						pLine[j] = '2';
 
+					//place solid between first and last solid
+					//if (j > firstSolid && j < lastSolid)
+					//	pLine[j] = '1';
 				}
-				
-				if (cluesVec[i].size() == 1 && numSolid < cluesVec[i][0])
+
+			}
+			
+			if (cluesVec[i].size() == 1 && numSolid < cluesVec[i][0])
+			{
+				//TODO what if there's two or more gaps. Make a struct for gaps?
+
+				//finds the first empty gap in a line
+				int gapStart = 0;
+				int gapEnd = lineLength;
+				int gapSize = 0;
+				bool inGap = false;
+				bool hasGap = false;
+
+				for (int j = 0; j < lineLength; j++)
 				{
-					//TODO what if there's two or more gaps. Make a struct for gaps?
-
-					//finds the first empty gap in a line
-					int gapStart = 0;
-					int gapEnd = lineLength;
-					int gapSize = 0;
-					bool inGap = false;
-					bool hasGap = false;
-
-					for (int j = 0; j < lineLength; j++)
+					if (pLine[j] != '2')
 					{
-						if (pLine[j] != '2')
+						if (!inGap)
 						{
-							if (!inGap)
-							{
-								gapStart = j;
-								hasGap = true;
-							}
-							inGap = true;
+							gapStart = j;
+							hasGap = true;
 						}
-						else
-						{
-							if (inGap)
-								gapEnd = j;
-							inGap = false;
-						}
+						inGap = true;
 					}
-
-					gapSize = gapEnd - gapStart;
-
-					//single clue fits gap
-					if (cluesVec[i][0] * 2 > gapSize)
+					else
 					{
-						if (cluesVec[i][0] > gapSize || !hasGap)
-						{
-							if (!hasGap)
-								cout << "i= " << i << " ERROR no gap" << endl;
-							else
-								cout << "i= " << i << " ERROR small gap" << endl;
-							delete[] pLine;
-							continue; //goto next line
-						}
+						if (inGap)
+							gapEnd = j;
+						inGap = false;
+					}
+				}
 
+				gapSize = gapEnd - gapStart;
+
+				//single clue fits gap
+				if (cluesVec[i][0] * 2 > gapSize)
+				{
+					if (cluesVec[i][0] > gapSize || !hasGap)
+					{
+						//debug
+						if (!hasGap)
+							cout << "i= " << i << " ERROR no gap" << endl;
+						else
+							cout << "i= " << i << " ERROR small gap" << endl;
+					}
+					else
+					{
 						int n = cluesVec[i][0] * 2 - gapSize;	//number of cells to add
 						int s = (gapSize / 2) - (n / 2);		//starting pos in gap
 
@@ -313,14 +358,12 @@ public:
 						for (int j = 0; j < n; j++)
 							pLine[s + gapStart + j] = '1';
 					}
-					else
-					{
-						delete[] pLine;
-						continue; //goto next line
-					}
 				}
-
+				
 			}
+
+			
+			// =============== END OF OLD ===============*/
 
 			//save the temp line to grid
 			if (clueOrientation == 'c')
@@ -330,9 +373,10 @@ public:
 				for (int j = 0; j < lineLength; j++)
 					pGrid[i * nGridWidth + j] = pLine[j];
 
-			delete pLine;
-			//end of a line
-
+			//free the memory
+			delete[] pLine;
+			delete[] pLeft;
+			delete[] pRight;
 		}
 		cout << "=====================" << endl;
 		return true;
